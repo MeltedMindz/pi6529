@@ -30,6 +30,10 @@ item is small enough to be one pull request. Nothing here is promised.
   option above.
 - **Hardware watchdog** (`RuntimeWatchdogSec` on the Pi's BCM watchdog) so a
   hung Pi reboots itself before 00:15 UTC.
+- **Use your own Ethereum node from the Pi.** `validator init` takes
+  `--own-execution` and `--own-beacon` (for example a Geth + Lighthouse pair
+  on another machine on the LAN); a `pi6529.txt` key pair for them, so a Pi
+  can report `OWN_NODE` without touching `config.toml` by hand.
 - **Read-only root / overlayfs option** for SD-card longevity, with the
   validator's data folder on a writable partition.
 
