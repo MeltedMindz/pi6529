@@ -13,7 +13,7 @@ This page only translates it to a Raspberry Pi shopping list.
 | Power | The official power supply for your model. Under-powered Pis reboot at random, and a reboot at 00:15 UTC is a missed day. |
 | Network | Ethernet or Wi-Fi. About 50 GB a month. No port to open on your router. |
 | Cooling | A Pi 5 wants the active cooler or a case with a fan. The validator's daily calculation is a few seconds; the rest of the day it idles. |
-| Clock | A Pi has no battery clock. It sets the time from the internet at boot; the image waits up to two minutes for that before starting the validator. A Pi 5 can take a small RTC battery; nice, not needed. |
+| Clock | A Pi has no battery clock. It sets the time from the internet at boot; the image waits up to 90 seconds for that before starting the validator. A Pi 5 can take a small RTC battery; nice, not needed. |
 
 ## 6529's "Acceptable" tier, as a Pi
 

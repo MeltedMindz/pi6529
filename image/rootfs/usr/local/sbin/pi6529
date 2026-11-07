@@ -65,10 +65,11 @@ cmd_link() {
     echo "     and log in with this Pi's password. Keep that window open: it carries the page."
     echo "  2. In a browser on that computer, open this one-time link (it works once, for 24 hours):"
     echo
-    if [ "$(service_state)" != "active" ]; then
-        echo "       ${yellow}(the validator service is not running: sudo pi6529 start)${reset}"
-        return 3
-    fi
+    case "$(service_state)" in
+        active) ;;
+        activating) echo "       ${yellow}(the validator is starting, waiting up to 90 s for the clock; run pi6529 link again in a minute)${reset}"; return 3 ;;
+        *) echo "       ${yellow}(the validator service is not running: sudo pi6529 start)${reset}"; return 3 ;;
+    esac
     local url
     if url="$(as_validator open --print --wait 30 2>/dev/null)"; then
         echo "       ${bold}${url}${reset}"
@@ -101,7 +102,7 @@ cmd_welcome() {
     fi
     case "$(service_state)" in
         active) ;;
-        activating) echo "${yellow}The validator service is starting (it waits up to 2 minutes for the clock).${reset}"; echo; return 0 ;;
+        activating) echo "${yellow}The validator service is starting (it waits up to 90 s for the clock).${reset}"; echo; return 0 ;;
         *) echo "${red}The validator service is not running.${reset} Start it: ${bold}sudo pi6529 start${reset}   See why: ${bold}pi6529 logs${reset}"; echo; return 0 ;;
     esac
     local out rc

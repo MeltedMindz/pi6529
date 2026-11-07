@@ -59,7 +59,7 @@ What happens by itself, in order:
 
 1. The Pi grows its file system, makes its own identity, and joins your network (about 1 minute).
 2. The validator is set up with a password and settings that exist only on this Pi, and started (a few seconds).
-3. The validator waits for the clock to set itself from the internet (up to 2 minutes), connects to Tor (1 to 2 minutes), finds other validators, and downloads and checks the network's history (**about 20 minutes** on 6529's measurements; a little longer each day the release ages).
+3. The validator waits for the clock to set itself from the internet (up to 90 seconds), connects to Tor (1 to 2 minutes), finds other validators, and downloads and checks the network's history (**about 20 minutes** on 6529's measurements; a little longer each day the release ages).
 
 You can do step 3 while it's still downloading; the page will show its progress.
 
@@ -199,7 +199,7 @@ rpi-imager --repo https://raw.githubusercontent.com/MeltedMindz/pi6529/main/imag
 - Raspberry Pi OS Lite (64-bit), Debian 13 "Trixie", 2026-10-06 release, unchanged except for the files below.
 - The 6529 validator, from 6529's own `.deb` for ARM64, installed unmodified and checked against the SHA-256 6529 lists.
 - `pi6529-firstboot.service`: sets the validator up on the first boot, on your Pi, so no password, key or config ever ships in the image.
-- A two-minute wait for the clock before the validator starts (a Pi has no battery clock).
+- A wait of up to 90 seconds for the clock before the validator starts (a Pi has no battery clock).
 - The `pi6529` helper and the login greeting.
 - `jq` and `unattended-upgrades` (Debian security updates only; the validator is excluded).
 - Wi-Fi power saving off; the log kept across reboots, capped at 200 MB.
