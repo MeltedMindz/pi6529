@@ -26,8 +26,7 @@ link from their hardware page, is worth more than any marketing.
 > shows the notes, verifies the feed through the validator's own key, checks
 > the SHA-256 and asks before installing.
 >
-> It's an independent project, says so everywhere, and is private until your
-> first public release. Two questions: is there anything in this design you'd
+> It's an independent project and says so everywhere. Two questions: is there anything in this design you'd
 > want different before holders use it, and would you be open to linking it
 > from the hardware page once it's public?
 

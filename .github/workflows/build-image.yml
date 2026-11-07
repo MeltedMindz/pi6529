@@ -1,9 +1,8 @@
 # Build the pi6529 image on GitHub's ARM64 runner and attach it to a Release.
 #
-# Run it by hand (Actions › build-image › Run workflow) with the tag to
-# release. The tag trigger is commented out while the repository is private:
-# the ARM64 runner is free for public repositories only. When the repo goes
-# public, uncomment `tags` below and every `v*` tag builds and releases.
+# Every `v*` tag builds and releases (the repository is public, so GitHub's
+# ARM64 runner is free). It can also be run by hand (Actions › build-image ›
+# Run workflow) with an existing tag.
 name: build-image
 on:
   workflow_dispatch:
@@ -11,8 +10,8 @@ on:
       tag:
         description: "Release tag (for example v0.1.0); must exist"
         required: true
-  # push:
-  #   tags: ["v*"]
+  push:
+    tags: ["v*"]
 permissions:
   contents: write
   id-token: write
