@@ -7,9 +7,9 @@
       "url": "https://github.com/MeltedMindz/pi6529/releases/download/v0.1.0/pi6529-0.1.0.img.xz",
       "release_date": "2026-11-07",
       "extract_size": 4152360960,
-      "extract_sha256": "33bb77b097be6745ff904471bcc9df60764aad24554fecfa4e982ae9dcd2dd64",
-      "image_download_size": 579285928,
-      "image_download_sha256": "67fa517f89912eefa5c406059eb271b2f3ec922e29fbd96f11836ff9250d91a0",
+      "extract_sha256": "2ae911d2989c2ad7030bb47d23759a60eaa26ec14fc30358d4ad6868da874eac",
+      "image_download_size": 579177048,
+      "image_download_sha256": "ec6b969e9a07286552cc1a06fc51bf8901d5ec268900c380cd71c31e1ede656a",
       "devices": [
         "pi5-64bit",
         "pi4-64bit"
