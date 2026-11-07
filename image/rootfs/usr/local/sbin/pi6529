@@ -147,6 +147,9 @@ version_ge() { # version_ge A B: is A >= B, with 0.1.0-rc.10 < 0.1.0 < 0.1.1-rc.
     dpkg --compare-versions "${1//-rc./~rc.}" ge "${2//-rc./~rc.}"
 }
 
+TMP=""
+cleanup_tmp() { [ -n "$TMP" ] && rm -rf "$TMP"; }
+
 cmd_update() {
     need_root "update" "$@"
     local check_only=no yes=no
@@ -155,37 +158,47 @@ cmd_update() {
     local current; current="$(/usr/bin/validator version --json 2>/dev/null | jq -r .release)"
     [ -n "$current" ] && [ "$current" != "null" ] || die "can't read the installed validator's version"
     echo "Installed: validator $current"
+    TMP="$(mktemp -d)"; trap cleanup_tmp EXIT
 
-    # The list of releases, checked by the validator itself against 6529's key.
-    local tmp; tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
-    local feed=""
-    if [ "$(service_state)" = "active" ] && feed="$(as_validator update check --json 2>/dev/null)" && [ -n "$feed" ]; then
+    # Where the list of releases comes from, in order of preference:
+    #  1. the running validator, which fetched 6529's signed list itself (through
+    #     Tor at home) and checked the signature with 6529's key built into it;
+    #  2. a download of the list, checked offline by `validator update check
+    #     --feed`, with the same key.
+    # Either way the result is normalized to: newest (version, notes, notes_url,
+    # channel, date, files), page (download page) and a deadline note.
+    local raw="" newest="" page="" note=""
+    if [ "$(service_state)" = "active" ] && raw="$(as_validator update check --json 2>/dev/null)" \
+        && [ -n "$raw" ] && echo "$raw" | jq -e '.state' >/dev/null 2>&1; then
         echo "Checked 6529's signed release list through the running validator."
-    fi
-    if [ -z "$feed" ] || ! echo "$feed" | jq -e '.releases' >/dev/null 2>&1; then
-        curl -fsSL -o "$tmp/releases.json" "$FEED_URL" && curl -fsSL -o "$tmp/releases.json.sig" "$FEED_URL.sig" \
+        newest="$(echo "$raw" | jq -c '{version: .latest, channel, date, commit, notes, notes_url, files: (.files // [])}')"
+        page="$(echo "$raw" | jq -r '.download_url // "https://6529.io/validator"')"
+        note="$(echo "$raw" | jq -r 'if (.reason // "") != "" then "\(.severity // "note"): \(.reason)" else empty end')"
+    else
+        curl -fsSL -o "$TMP/releases.json" "$FEED_URL" && curl -fsSL -o "$TMP/releases.json.sig" "$FEED_URL.sig" \
             || die "couldn't download $FEED_URL"
-        chmod 644 "$tmp"/releases.json*; chmod 755 "$tmp"
-        feed="$(as_validator update check --feed "$tmp/releases.json" --json 2>&1)" \
-            || die "the downloaded list did not verify against 6529's key: $feed"
+        chmod 644 "$TMP"/releases.json*; chmod 755 "$TMP"
+        raw="$(as_validator update check --feed "$TMP/releases.json" --json 2>&1)" \
+            || die "the downloaded list did not verify against 6529's key: $raw"
         echo "Downloaded 6529's release list; its signature verified with the key built into the validator."
+        newest="$(echo "$raw" | jq -c '
+            (.unsafe_versions // [] | map(.version)) as $unsafe
+            | [.releases[] | select(.version as $v | $unsafe | index($v) | not)] | .[0]')"
+        page="$(echo "$raw" | jq -r '.download_page // "https://6529.io/validator"')"
+        note="$(echo "$raw" | jq -r 'if .deadline then "\(.deadline_reason // "") Deadline: \(.deadline)" else empty end')"
     fi
-    local newest version notes_url deb_name deb_sha deb_size page
-    newest="$(echo "$feed" | jq -c '
-        (.unsafe_versions // [] | map(.version)) as $unsafe
-        | [.releases[] | select(.version as $v | $unsafe | index($v) | not)] | .[0]')"
     [ -n "$newest" ] && [ "$newest" != "null" ] || die "no release in the list"
+    local version notes_url
     version="$(echo "$newest" | jq -r .version)"
     notes_url="$(echo "$newest" | jq -r '.notes_url // "https://6529.io/validator/releases"')"
-    page="$(echo "$feed" | jq -r '.download_page // "https://6529.io/validator"')"
     if version_ge "$current" "$version"; then
         echo "${green}Up to date:${reset} $version is the newest release."
-        echo "$feed" | jq -r 'if .deadline then "Note: \(.deadline_reason // "") (deadline \(.deadline))" else empty end'
+        [ -n "$note" ] && echo "Note: $note"
         return 0
     fi
     echo
-    echo "${bold}Newer release: validator $version${reset} ($(echo "$newest" | jq -r '.channel') channel, $(echo "$newest" | jq -r '.date // ""'))"
-    echo "$feed" | jq -r 'if .deadline then "\(.deadline_reason // "") Deadline: \(.deadline)" else empty end'
+    echo "${bold}Newer release: validator $version${reset} ($(echo "$newest" | jq -r '.channel // "?"') channel, $(echo "$newest" | jq -r '.date // ""'))"
+    [ -n "$note" ] && echo "$note"
     echo
     echo "$newest" | jq -r '.notes // ""' | sed 's/^/  /'
     echo
@@ -196,20 +209,21 @@ cmd_update() {
         read -r -p "Install validator $version now? Your key, authorization and records stay. [y/N] " ans
         case "$ans" in y|Y|yes) ;; *) echo "Not installed."; return 0 ;; esac
     fi
+    local deb_name deb_sha deb_size
     deb_name="$(echo "$newest" | jq -r '.files[] | select(.name | endswith("_arm64.deb")) | .name' | head -1)"
     deb_sha="$(echo "$newest" | jq -r '.files[] | select(.name | endswith("_arm64.deb")) | .sha256' | head -1)"
     deb_size="$(echo "$newest" | jq -r '.files[] | select(.name | endswith("_arm64.deb")) | .size // empty' | head -1)"
     [ -n "$deb_name" ] && [ -n "$deb_sha" ] || die "release $version lists no ARM64 .deb"
     local url="$page/download/$version/$deb_name"
     echo "Downloading $url"
-    curl -fL --retry 3 --progress-bar -o "$tmp/$deb_name" "$url" || die "download failed"
-    local got; got="$(sha256sum "$tmp/$deb_name" | cut -d' ' -f1)"
+    curl -fL --retry 3 --progress-bar -o "$TMP/$deb_name" "$url" || die "download failed"
+    local got; got="$(sha256sum "$TMP/$deb_name" | cut -d' ' -f1)"
     [ "$got" = "$deb_sha" ] || die "SHA-256 mismatch: the file is not the one 6529 listed. Nothing installed.
   wanted $deb_sha
   got    $got"
     echo "SHA-256 matches 6529's signed list${deb_size:+ ($deb_size bytes)}."
     echo "Installing (the service stops and starts again by itself)..."
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-downgrades "$tmp/$deb_name" || die "apt-get install failed; the previous release is still installed"
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-downgrades "$TMP/$deb_name" || die "apt-get install failed; the previous release is still installed"
     echo
     echo "${green}Installed:${reset} $(/usr/bin/validator --version)"
     echo "Check it: pi6529"

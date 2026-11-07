@@ -22,5 +22,8 @@ First image.
   blacklisted; SSH on, no default user.
 - Build: pinned inputs, 29 image checks, Raspberry Pi Imager entry generator,
   pin-bump script, GitHub Actions workflow.
-- Known limits: not yet booted on real hardware by the author; image not
+- Verified: 29 image checks; a systemd boot of the root filesystem on an
+  ARM64 host, where first boot, the validator (Tor, peers, history, page) and
+  every `pi6529` command worked.
+- Known limits: not yet booted on real Pi hardware by the author; image not
   byte-for-byte reproducible (apt packages from mirrors).

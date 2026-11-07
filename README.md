@@ -4,7 +4,7 @@
 
 pi6529 is a ready-made SD-card image for a Raspberry Pi 4 or 5. It is Raspberry Pi OS with the official [6529 validator](https://6529.io/validator) already installed and set to start by itself. The validator reads Ethereum once a day, works out everyone's TDH, and signs the result with a key that lives only on your Pi. Your wallet signs one message, once, to say that key speaks for your account. That's the whole job.
 
-> **Status: early test build.** 6529's validator is itself a test release (0.1.0-rc.10). This image has been built and checked by machine (29 checks, including a boot of its file system under systemd), but **not yet booted on a real Pi by the author**. The validator in it stops signing on 1 December 2026, and 6529 asks that new installs start before about 23 November 2026; a newer image will follow 6529's next release. Try it, tell us what happened, don't bet the farm on it yet.
+> **Status: early test build.** 6529's validator is itself a test release (0.1.0-rc.10). This image has been built and checked by machine (29 checks), and its file system has been booted under systemd on an ARM64 host, where the validator connected to Tor and to other validators and its page came up. It has **not yet been booted on a real Pi by the author**, so the kernel, Wi-Fi and Imager steps are untested. The validator in it stops signing on 1 December 2026, and 6529 asks that new installs start before about 23 November 2026; a newer image will follow 6529's next release. Try it, tell us what happened, don't bet the farm on it yet.
 >
 > pi6529 is an independent community project. It is **not made by, affiliated with or endorsed by 6529**. 6529 never starts a DM with you or asks for a seed phrase. Neither do we.
 
