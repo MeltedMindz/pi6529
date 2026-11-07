@@ -1,0 +1,22 @@
+# pi6529: set the validator up on the first boot of this Pi, and only then.
+# It makes the validator's data folder with a password of this Pi's own, then
+# enables and starts the validator service. It makes no key: you do that on
+# the validator's page, so every key is born on the Pi it lives on.
+[Unit]
+Description=pi6529 first-boot setup of the 6529 validator
+Documentation=https://github.com/MeltedMindz/pi6529
+ConditionPathExists=!/var/lib/pi6529/firstboot-done
+After=local-fs.target systemd-tmpfiles-setup.service
+Before=6529-validator.service
+# Runs regardless of the network: nothing here needs it.
+DefaultDependencies=no
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/lib/pi6529/firstboot.sh
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target

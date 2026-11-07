@@ -1,0 +1,28 @@
+# pi6529 settings
+#
+# This file sits on the small "bootfs" partition, which any computer can open,
+# so you can change it before the first boot without logging in. The Pi reads
+# it once, on its first boot, when it sets the validator up. After that, change
+# settings on the validator's page (Settings) or in
+# /var/lib/6529-validator/config.toml on the Pi.
+#
+# Lines starting with # are comments. Leave a value empty to use the default.
+
+# A label for this Pi, shown only on its own page. Default: the Pi's hostname.
+name=
+
+# Where it runs: home (Tor on, connects out only, hides your address) or
+# datacenter (Tor off, listens on a public address). Keep home at home.
+mode=home
+
+# The built-in Tor client: on or off. At home keep it on.
+tor=on
+
+# The port of the validator's page on the Pi itself (127.0.0.1 only).
+# The README's ssh command uses this number. 6529 reserves 6529, so not that.
+ui_port=7529
+
+# Your country as a two-letter code (US, DE, JP ...). Optional. With Tor on the
+# Pi can't always work it out by itself; the country stays on the Pi unless
+# you turn on "Show my country" in Settings.
+country=

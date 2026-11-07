@@ -1,0 +1,11 @@
+#!/bin/sh
+# Wait up to $1 seconds for systemd-timesyncd to report a synchronized clock.
+# Never fails: a validator with a wrong clock refuses to sign on its own, and
+# Tor retries by itself, so starting late is better than not starting.
+limit="${1:-120}"; i=0
+while [ "$i" -lt "$limit" ]; do
+    [ -e /run/systemd/timesync/synchronized ] && exit 0
+    i=$((i + 1)); sleep 1
+done
+echo "pi6529: the clock is not synchronized yet after ${limit}s; starting the validator anyway."
+exit 0

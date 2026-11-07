@@ -1,0 +1,11 @@
+// pi6529: install Debian security updates by themselves, at night, and
+// never touch the validator. 6529's rule is that you install each validator
+// release yourself after reading its notes (`pi6529 update` does that).
+Unattended-Upgrade::Package-Blacklist {
+    "6529-validator";
+};
+Unattended-Upgrade::Remove-Unused-Dependencies "true";
+Unattended-Upgrade::Automatic-Reboot "false";
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+APT::Periodic::AutocleanInterval "7";

@@ -1,0 +1,10 @@
+# Build outputs and caches: never commit an image or a download.
+/dist/
+/.cache/
+*.img
+*.img.xz
+*.deb
+*.tar.gz
+# Local notes
+/.local/
+.DS_Store

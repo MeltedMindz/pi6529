@@ -1,0 +1,25 @@
+name: lint
+on:
+  push:
+  pull_request:
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: bash -n on every script
+        run: make lint
+      - name: shellcheck
+        run: |
+          sudo apt-get -qq update && sudo apt-get -qq install -y shellcheck
+          shellcheck -x build/*.sh build/inside/*.sh image/rootfs/usr/local/sbin/pi6529 image/rootfs/usr/local/lib/pi6529/firstboot.sh || true
+      - name: pins look sane
+        run: |
+          set -e
+          source build/config.env
+          for v in BASE_URL BASE_XZ_SHA256 BASE_IMG_SHA256 VALIDATOR_DEB_URL VALIDATOR_DEB_SHA256 VALIDATOR_VERSION UI_PORT; do
+            [ -n "${!v}" ] || { echo "$v is empty"; exit 1; }
+          done
+          [[ "$VALIDATOR_DEB_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$BASE_XZ_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [ "$UI_PORT" != "6529" ]

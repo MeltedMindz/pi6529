@@ -1,0 +1,21 @@
+{
+  "os_list": [
+    {
+      "name": "pi6529 0.1.0 (6529 Validator 0.1.0-rc.10)",
+      "description": "Raspberry Pi OS Lite (64-bit) with the 6529 validator installed and set to start on first boot. Makes its key on your Pi; you authorize it with your wallet.",
+      "icon": "https://raw.githubusercontent.com/MeltedMindz/pi6529/main/imager/icon.png",
+      "url": "https://github.com/MeltedMindz/pi6529/releases/download/v0.1.0/pi6529-0.1.0.img.xz",
+      "release_date": "2026-11-07",
+      "extract_size": 4152360960,
+      "extract_sha256": "33bb77b097be6745ff904471bcc9df60764aad24554fecfa4e982ae9dcd2dd64",
+      "image_download_size": 579285928,
+      "image_download_sha256": "67fa517f89912eefa5c406059eb271b2f3ec922e29fbd96f11836ff9250d91a0",
+      "devices": [
+        "pi5-64bit",
+        "pi4-64bit"
+      ],
+      "init_format": "cloudinit-rpi",
+      "website": "https://github.com/MeltedMindz/pi6529"
+    }
+  ]
+}

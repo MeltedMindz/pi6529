@@ -1,0 +1,246 @@
+#!/bin/bash
+# pi6529: the helper for a Raspberry Pi that runs the 6529 validator.
+# Everything here wraps 6529's own `validator` program, run as its service
+# account, with this image's settings filled in. `pi6529 help` lists it.
+set -uo pipefail
+
+DATA=/var/lib/6529-validator
+ACCOUNT=validator6529
+UNIT=6529-validator.service
+SETTINGS=/var/lib/pi6529/settings
+RELEASE=/etc/pi6529/release
+FEED_URL="https://6529.io/validator/releases.json"
+
+bold=$'\e[1m'; dim=$'\e[2m'; red=$'\e[31m'; green=$'\e[32m'; yellow=$'\e[33m'; reset=$'\e[0m'
+[ -t 1 ] || { bold=""; dim=""; red=""; green=""; yellow=""; reset=""; }
+
+die() { echo "${red}pi6529: $*${reset}" >&2; exit 1; }
+need_root() {
+    if [ "$(id -u)" != "0" ]; then
+        exec sudo -- "$0" "$@"
+    fi
+}
+as_validator() { runuser -u "$ACCOUNT" -- /usr/bin/validator "$@" --data-dir "$DATA"; }
+ui_port() { sed -n 's/^ui_port=//p' "$SETTINGS" 2>/dev/null | head -1; }
+login_user() { echo "${SUDO_USER:-$(logname 2>/dev/null || echo you)}"; }
+host_name() { hostname 2>/dev/null || echo pi6529; }
+tunnel_cmd() { local p; p="$(ui_port)"; p="${p:-7529}"; echo "ssh -L $p:127.0.0.1:$p $(login_user)@$(host_name).local"; }
+
+cmd_help() {
+    cat <<HELP
+${bold}pi6529${reset}: a Raspberry Pi that runs the 6529 validator.
+
+  ${bold}pi6529${reset}                 what the validator is doing, and what to do next
+  ${bold}pi6529 link${reset}            the link to open the validator's page from your computer
+  ${bold}pi6529 status${reset} [-v]     today in plain words (-v: everything), from 6529's validator
+  ${bold}pi6529 logs${reset} [-f]       the validator's log (-f: follow it; Ctrl-C stops following)
+  ${bold}pi6529 update${reset} [--check] check 6529's signed release list; install a newer release
+  ${bold}pi6529 pause${reset} | ${bold}resume${reset}  pause signing (keeps checking), or sign again
+  ${bold}pi6529 restart${reset} | ${bold}stop${reset} | ${bold}start${reset}   the validator service
+  ${bold}pi6529 tor-report${reset}      a report on Tor to paste where you ask for help (no addresses in it)
+  ${bold}pi6529 version${reset}         this image, the validator and the system
+  ${bold}pi6529 settings${reset}        the settings this Pi was set up with, and where to change them
+  ${bold}pi6529 repair${reset}          run the first-boot setup again if it never finished
+  ${bold}pi6529 validator${reset} ...   run any \`validator\` command as the service account
+
+Your key lives only on this Pi, in $DATA. Never copy that folder,
+never clone this SD card, and never put a backup of it back. A copied key can
+sign twice, and your account then stops counting for 30 days or more.
+
+6529 never starts a DM with you or asks for a seed phrase.
+HELP
+}
+
+service_state() { systemctl is-active "$UNIT" 2>/dev/null || true; }
+
+cmd_link() {
+    need_root "link" "$@"
+    local p; p="$(ui_port)"; p="${p:-7529}"
+    echo "${bold}Open the validator's page from your own computer${reset}"
+    echo
+    echo "  1. On your computer (Mac: Terminal; Windows: PowerShell; Linux: a terminal), run:"
+    echo
+    echo "       ${bold}$(tunnel_cmd)${reset}"
+    echo
+    echo "     and log in with this Pi's password. Keep that window open: it carries the page."
+    echo "  2. In a browser on that computer, open this one-time link (it works once, for 24 hours):"
+    echo
+    if [ "$(service_state)" != "active" ]; then
+        echo "       ${yellow}(the validator service is not running: sudo pi6529 start)${reset}"
+        return 3
+    fi
+    local url
+    if url="$(as_validator open --print --wait 30 2>/dev/null)"; then
+        echo "       ${bold}${url}${reset}"
+        echo
+        echo "  If the address alone opens a page that can't sign, you missed the ?token= part: copy the whole link."
+        echo "  Need a new link later? Run ${bold}pi6529 link${reset} again."
+    else
+        echo "       ${yellow}(the validator is still starting; try again in a minute: pi6529 link)${reset}"
+        return 3
+    fi
+}
+
+cmd_status() {
+    need_root "status" "$@"
+    local args=()
+    [ "${1:-}" = "-v" ] || [ "${1:-}" = "--verbose" ] && args+=(--verbose)
+    as_validator status "${args[@]}"
+}
+
+cmd_welcome() {
+    need_root "welcome"
+    local rel; rel="$(sed -n 's/^PI6529_VERSION=//p' "$RELEASE" 2>/dev/null)"
+    echo
+    echo "${bold}pi6529${reset} ${dim}${rel:+v$rel }· 6529 validator on this Raspberry Pi · pi6529 help${reset}"
+    echo
+    if [ ! -e /var/lib/pi6529/firstboot-done ]; then
+        echo "${yellow}The first-boot setup has not finished yet. Give it a minute, then log in again.${reset}"
+        echo "If it still says this: sudo journalctl -u pi6529-firstboot, or sudo pi6529 repair"
+        echo; return 0
+    fi
+    case "$(service_state)" in
+        active) ;;
+        activating) echo "${yellow}The validator service is starting (it waits up to 2 minutes for the clock).${reset}"; echo; return 0 ;;
+        *) echo "${red}The validator service is not running.${reset} Start it: ${bold}sudo pi6529 start${reset}   See why: ${bold}pi6529 logs${reset}"; echo; return 0 ;;
+    esac
+    local out rc
+    out="$(as_validator status 2>&1)"; rc=$?
+    echo "$out" | head -14
+    echo
+    case $rc in
+        0) echo "${green}Nothing needs you.${reset} The page, if you want it: ${bold}pi6529 link${reset}" ;;
+        5) echo "${yellow}Something needs you.${reset} Open the page: ${bold}pi6529 link${reset}" ;;
+        3) echo "${yellow}The validator is still starting.${reset} Try again in a minute: ${bold}pi6529${reset}" ;;
+        *) echo "Try: ${bold}pi6529 logs${reset}" ;;
+    esac
+    echo
+}
+
+cmd_logs() {
+    need_root "logs" "$@"
+    if [ "${1:-}" = "-f" ]; then journalctl -u "$UNIT" -n 100 -f --no-hostname
+    else journalctl -u "$UNIT" -n 200 --no-pager --no-hostname; fi
+}
+
+cmd_version() {
+    echo "${bold}pi6529 image${reset}"
+    if [ -r "$RELEASE" ]; then sed 's/^/  /' "$RELEASE"; else echo "  (no $RELEASE)"; fi
+    echo "${bold}validator${reset}"
+    echo "  $(/usr/bin/validator --version 2>/dev/null || echo 'not installed')"
+    echo "${bold}system${reset}"
+    echo "  $(sed -n 's/^PRETTY_NAME="\(.*\)"/\1/p' /etc/os-release) · $(uname -m) · kernel $(uname -r)"
+    [ -r /proc/device-tree/model ] && echo "  $(tr -d '\0' < /proc/device-tree/model)"
+    echo "  service: $(service_state)"
+}
+
+cmd_settings() {
+    echo "${bold}Set up with${reset} (from /boot/firmware/pi6529.txt, read on the first boot):"
+    if [ -r "$SETTINGS" ]; then sed 's/^/  /' "$SETTINGS"; else echo "  (first boot not finished)"; fi
+    echo
+    echo "To change settings now: on the page (Settings), or in $DATA/config.toml,"
+    echo "then sudo pi6529 restart. /boot/firmware/pi6529.txt is read only on the first boot."
+}
+
+version_ge() { # version_ge A B: is A >= B, with 0.1.0-rc.10 < 0.1.0 < 0.1.1-rc.1
+    dpkg --compare-versions "${1//-rc./~rc.}" ge "${2//-rc./~rc.}"
+}
+
+cmd_update() {
+    need_root "update" "$@"
+    local check_only=no yes=no
+    for a in "$@"; do case "$a" in --check) check_only=yes ;; --yes|-y) yes=yes ;; esac; done
+    command -v jq >/dev/null || die "jq is missing (apt install jq)"
+    local current; current="$(/usr/bin/validator version --json 2>/dev/null | jq -r .release)"
+    [ -n "$current" ] && [ "$current" != "null" ] || die "can't read the installed validator's version"
+    echo "Installed: validator $current"
+
+    # The list of releases, checked by the validator itself against 6529's key.
+    local tmp; tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+    local feed=""
+    if [ "$(service_state)" = "active" ] && feed="$(as_validator update check --json 2>/dev/null)" && [ -n "$feed" ]; then
+        echo "Checked 6529's signed release list through the running validator."
+    fi
+    if [ -z "$feed" ] || ! echo "$feed" | jq -e '.releases' >/dev/null 2>&1; then
+        curl -fsSL -o "$tmp/releases.json" "$FEED_URL" && curl -fsSL -o "$tmp/releases.json.sig" "$FEED_URL.sig" \
+            || die "couldn't download $FEED_URL"
+        chmod 644 "$tmp"/releases.json*; chmod 755 "$tmp"
+        feed="$(as_validator update check --feed "$tmp/releases.json" --json 2>&1)" \
+            || die "the downloaded list did not verify against 6529's key: $feed"
+        echo "Downloaded 6529's release list; its signature verified with the key built into the validator."
+    fi
+    local newest version notes_url deb_name deb_sha deb_size page
+    newest="$(echo "$feed" | jq -c '
+        (.unsafe_versions // [] | map(.version)) as $unsafe
+        | [.releases[] | select(.version as $v | $unsafe | index($v) | not)] | .[0]')"
+    [ -n "$newest" ] && [ "$newest" != "null" ] || die "no release in the list"
+    version="$(echo "$newest" | jq -r .version)"
+    notes_url="$(echo "$newest" | jq -r '.notes_url // "https://6529.io/validator/releases"')"
+    page="$(echo "$feed" | jq -r '.download_page // "https://6529.io/validator"')"
+    if version_ge "$current" "$version"; then
+        echo "${green}Up to date:${reset} $version is the newest release."
+        echo "$feed" | jq -r 'if .deadline then "Note: \(.deadline_reason // "") (deadline \(.deadline))" else empty end'
+        return 0
+    fi
+    echo
+    echo "${bold}Newer release: validator $version${reset} ($(echo "$newest" | jq -r '.channel') channel, $(echo "$newest" | jq -r '.date // ""'))"
+    echo "$feed" | jq -r 'if .deadline then "\(.deadline_reason // "") Deadline: \(.deadline)" else empty end'
+    echo
+    echo "$newest" | jq -r '.notes // ""' | sed 's/^/  /'
+    echo
+    echo "  Full notes: $notes_url"
+    echo
+    [ "$check_only" = "yes" ] && { echo "Install it with: sudo pi6529 update"; return 0; }
+    if [ "$yes" != "yes" ]; then
+        read -r -p "Install validator $version now? Your key, authorization and records stay. [y/N] " ans
+        case "$ans" in y|Y|yes) ;; *) echo "Not installed."; return 0 ;; esac
+    fi
+    deb_name="$(echo "$newest" | jq -r '.files[] | select(.name | endswith("_arm64.deb")) | .name' | head -1)"
+    deb_sha="$(echo "$newest" | jq -r '.files[] | select(.name | endswith("_arm64.deb")) | .sha256' | head -1)"
+    deb_size="$(echo "$newest" | jq -r '.files[] | select(.name | endswith("_arm64.deb")) | .size // empty' | head -1)"
+    [ -n "$deb_name" ] && [ -n "$deb_sha" ] || die "release $version lists no ARM64 .deb"
+    local url="$page/download/$version/$deb_name"
+    echo "Downloading $url"
+    curl -fL --retry 3 --progress-bar -o "$tmp/$deb_name" "$url" || die "download failed"
+    local got; got="$(sha256sum "$tmp/$deb_name" | cut -d' ' -f1)"
+    [ "$got" = "$deb_sha" ] || die "SHA-256 mismatch: the file is not the one 6529 listed. Nothing installed.
+  wanted $deb_sha
+  got    $got"
+    echo "SHA-256 matches 6529's signed list${deb_size:+ ($deb_size bytes)}."
+    echo "Installing (the service stops and starts again by itself)..."
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-downgrades "$tmp/$deb_name" || die "apt-get install failed; the previous release is still installed"
+    echo
+    echo "${green}Installed:${reset} $(/usr/bin/validator --version)"
+    echo "Check it: pi6529"
+}
+
+cmd_repair() {
+    need_root "repair"
+    rm -f /var/lib/pi6529/firstboot-done
+    systemctl restart pi6529-firstboot.service
+    journalctl -u pi6529-firstboot.service -n 30 --no-pager --no-hostname
+}
+
+main() {
+    local cmd="${1:-welcome}"; shift || true
+    case "$cmd" in
+        ""|welcome)   cmd_welcome ;;
+        link)         cmd_link "$@" ;;
+        status)       cmd_status "$@" ;;
+        logs|log)     cmd_logs "$@" ;;
+        update)       cmd_update "$@" ;;
+        pause)        need_root pause; as_validator pause ;;
+        resume)       need_root resume; as_validator resume ;;
+        restart)      need_root restart; systemctl restart "$UNIT" && echo "restarted" ;;
+        stop)         need_root stop; /usr/bin/validator service stop ;;
+        start)        need_root start; /usr/bin/validator service start ;;
+        tor-report)   need_root tor-report; as_validator diagnose tor ;;
+        version)      cmd_version ;;
+        settings)     cmd_settings ;;
+        repair)       cmd_repair ;;
+        validator)    need_root validator "$@"; as_validator "$@" ;;
+        help|-h|--help) cmd_help ;;
+        *) echo "pi6529: unknown command '$cmd'"; echo; cmd_help; exit 2 ;;
+    esac
+}
+main "$@"
